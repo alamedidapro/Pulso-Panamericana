@@ -227,7 +227,7 @@
   .q-panel-head{font-size:13.5px; font-weight:700; color:var(--ink); margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:8px;}
   .q-panel-count{font-size:11px; font-weight:600; color:var(--muted,#8a8a8a); font-family:var(--font-num,'Helvetica Neue',Arial,sans-serif); white-space:nowrap;}
   .q-panel-content{display:flex; align-items:center; gap:22px; flex-wrap:wrap;}
-  .gauge-wrap-lg{position:relative; width:100%; max-width:230px; height:135px; flex:none; margin:0 auto;}
+  .gauge-wrap-lg{position:relative; width:100%; max-width:340px; height:200px; flex:none; margin:0 auto;}
   .gauge-wrap-lg canvas{position:absolute; inset:0;}
   .gauge-center-lg{position:absolute; left:0; right:0; top:56%; text-align:center; pointer-events:none;}
   .gauge-center-lg .gv{font-family:var(--font-num); font-size:23px; font-weight:700; color:var(--ink);}
@@ -339,12 +339,12 @@
       <div class="kpi-card">
         <div class="label">Orgullo · Agosto 2025</div>
         <div class="value num" id="kpiProud2A">–</div>
-        <div class="sub">de quienes respondieron esta pregunta</div>
+        <div class="sub" id="kpiProudSub2A">de quienes respondieron esta pregunta</div>
       </div>
       <div class="kpi-card">
         <div class="label">Orgullo · Marzo 2026</div>
         <div class="value num" id="kpiProud1M">–</div>
-        <div class="sub">de quienes respondieron esta pregunta</div>
+        <div class="sub" id="kpiProudSub1M">de quienes respondieron esta pregunta</div>
       </div>
     </div>
   </section>
@@ -442,7 +442,7 @@ const QUESTION_TEXTS = [
   '7. ¿En la Compañía aprendemos de los errores, de los logros y construimos sobre las lecciones aprendidas?',
   '8. ¿En la Compañía los equipos trabajamos de forma alineada para hacer que las cosas pasen?',
   '9. ¿Cuento con las herramientas y los recursos para cumplir con mis objetivos y entregar el mejor resultado?',
-  '10. ¿Qué tan probable es que recomiendes el Grupo Levapan a tus amigos, compañeros de trabajo o familiares?',
+  '10. ¿Qué tan probable es que recomiendes a Panal a tus amigos, compañeros de trabajo o familiares?',
 ];
 
 // ---------- FILTER STATE ----------
@@ -645,7 +645,7 @@ function computeStats(rows){
   const total = P+A+N;
   const nps = total>0 ? (P/total*100) : null;
   const proudPct = proudTot>0 ? (proudS/proudTot*100) : null;
-  return {count: rows.length, P,A,N,total,nps,proudPct,perQ};
+  return {count: rows.length, P,A,N,total,nps,proudPct,proudS,proudTot,perQ};
 }
 
 function fmtIndex(v){
@@ -678,16 +678,43 @@ function halfDonutData(cat){
   };
 }
 const halfDonutOpts = {
-  rotation:-90, circumference:180, cutout:'72%',
+  rotation:-90, circumference:180, cutout:'55%',
   plugins:{legend:{display:false}, tooltip:{enabled:true}},
   animation:{duration:400},
   responsive:true, maintainAspectRatio:false,
+};
+const gaugeSegmentLabelPlugin = {
+  id: 'gaugeSegmentLabel',
+  afterDraw(chart){
+    const {ctx} = chart;
+    const meta = chart.getDatasetMeta(0);
+    const dataset = chart.data.datasets[0];
+    const total = (dataset.data || []).reduce((a,b)=>a+(b||0),0);
+    if(total<=0) return;
+    meta.data.forEach((arc, i) => {
+      const value = dataset.data[i];
+      if(!value) return;
+      const pct = value/total*100;
+      const props = arc.getProps(['x','y','startAngle','endAngle','innerRadius','outerRadius'], true);
+      const mid = (props.startAngle + props.endAngle)/2;
+      const r = (props.innerRadius + props.outerRadius)/2;
+      const x = props.x + Math.cos(mid)*r;
+      const y = props.y + Math.sin(mid)*r;
+      ctx.save();
+      ctx.font = '700 15px Helvetica Neue, Arial, sans-serif';
+      ctx.fillStyle = '#1a1f36';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pct.toFixed(1)+'%', x, y);
+      ctx.restore();
+    });
+  }
 };
 
 function renderGauge(canvasId, catStats){
   const ctx = document.getElementById(canvasId).getContext('2d');
   if(gaugeCharts[canvasId]) gaugeCharts[canvasId].destroy();
-  gaugeCharts[canvasId] = new Chart(ctx, {type:'doughnut', data:halfDonutData(catStats), options:halfDonutOpts});
+  gaugeCharts[canvasId] = new Chart(ctx, {type:'doughnut', data:halfDonutData(catStats), options:halfDonutOpts, plugins:[gaugeSegmentLabelPlugin]});
 }
 
 function buildQuestionCards(){
@@ -707,7 +734,6 @@ function buildQuestionCards(){
           <div class="q-panel-content">
             <div class="gauge-wrap-lg">
               <canvas id="g-${qi}-2a"></canvas>
-              <div class="gauge-center-lg"><div class="gv" id="gv-${qi}-2a">–</div></div>
             </div>
             <div class="legend-list" id="ll-${qi}-2a"></div>
           </div>
@@ -717,7 +743,6 @@ function buildQuestionCards(){
           <div class="q-panel-content">
             <div class="gauge-wrap-lg">
               <canvas id="g-${qi}-1m"></canvas>
-              <div class="gauge-center-lg"><div class="gv" id="gv-${qi}-1m">–</div></div>
             </div>
             <div class="legend-list" id="ll-${qi}-1m"></div>
           </div>
@@ -757,8 +782,6 @@ function renderQuestions(stats2A, stats1M){
     renderGauge(`g-${qi}-1m`, cat1M);
     const nps2A = questionNPS(cat2A);
     const nps1M = questionNPS(cat1M);
-    document.getElementById(`gv-${qi}-2a`).textContent = fmtIndex(nps2A);
-    document.getElementById(`gv-${qi}-1m`).textContent = fmtIndex(nps1M);
     document.getElementById(`qcount-${qi}-2a`).textContent = 'Participantes: ' + (cat2A.P+cat2A.A+cat2A.N);
     document.getElementById(`qcount-${qi}-1m`).textContent = 'Participantes: ' + (cat1M.P+cat1M.A+cat1M.N);
     updateLegendList(`ll-${qi}-2a`, cat2A);
@@ -885,6 +908,8 @@ function render(){
   document.getElementById('kpiIndex1M').textContent = fmtIndex(stats1M.nps);
   document.getElementById('kpiProud2A').textContent = fmtPct(stats2A.proudPct);
   document.getElementById('kpiProud1M').textContent = fmtPct(stats1M.proudPct);
+  document.getElementById('kpiProudSub2A').textContent = stats2A.proudTot>0 ? `${stats2A.proudS.toLocaleString('es-CO')} de ${stats2A.proudTot.toLocaleString('es-CO')} respondieron que sí` : 'de quienes respondieron esta pregunta';
+  document.getElementById('kpiProudSub1M').textContent = stats1M.proudTot>0 ? `${stats1M.proudS.toLocaleString('es-CO')} de ${stats1M.proudTot.toLocaleString('es-CO')} respondieron que sí` : 'de quienes respondieron esta pregunta';
 
   const delta = (stats2A.nps!==null && stats1M.nps!==null) ? stats1M.nps - stats2A.nps : null;
   const deltaEl = document.getElementById('kpiDelta');
