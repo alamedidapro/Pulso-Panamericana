@@ -754,11 +754,11 @@ function proudDonutData(yes, no){
   };
 }
 const fullDonutOpts = {
-  cutout:'62%',
+  cutout:0,
   plugins:{legend:{display:false}, tooltip:{enabled:true}},
   animation:{duration:400},
   responsive:true, maintainAspectRatio:false,
-  layout:{padding:34},
+  layout:{padding:30},
 };
 const donutCalloutPlugin = {
   id:'donutCallout',
@@ -768,72 +768,33 @@ const donutCalloutPlugin = {
     const dataset = chart.data.datasets[0];
     const total = (dataset.data || []).reduce((a,b)=>a+(b||0),0);
     if(total<=0) return;
-    const margin = 8;
     meta.data.forEach((arc, i) => {
       const value = dataset.data[i];
       if(!value) return;
       const pct = value/total*100;
-      const props = arc.getProps(['x','y','startAngle','endAngle','innerRadius','outerRadius'], true);
+      const props = arc.getProps(['x','y','startAngle','endAngle','outerRadius'], true);
       const mid = (props.startAngle + props.endAngle)/2;
-      const edgeR = props.outerRadius;
-      const labelR = edgeR + 22;
-      const ex = props.x + Math.cos(mid)*edgeR;
-      const ey = props.y + Math.sin(mid)*edgeR;
-      let lx = props.x + Math.cos(mid)*labelR;
-      let ly = props.y + Math.sin(mid)*labelR;
-      const onRight = Math.cos(mid) >= -0.001;
       const pctText = pct.toFixed(1).replace('.', ',')+'%';
-      const countText = value.toLocaleString('es-CO');
-      ctx.font = '700 16px Helvetica Neue, Arial, sans-serif';
-      const pctWidth = ctx.measureText(pctText).width;
-      ctx.font = '600 11px Helvetica Neue, Arial, sans-serif';
-      const countWidth = ctx.measureText(countText).width;
-      const maxTextWidth = Math.max(pctWidth, countWidth);
-      // Keep the two-line label (percentage + count) fully inside the canvas:
-      // a leader-line label near the top/bottom/side of the ring would otherwise
-      // have its text clipped by the canvas edge (e.g. the count cut off below
-      // a near-bottom label). Clamp the label point so both lines of text,
-      // in either reading direction, stay within the drawable area.
-      let textX = lx + (onRight ? 7 : -7);
-      if(onRight){
-        const rightEdge = textX + maxTextWidth;
-        if(rightEdge > chart.width - margin){
-          const shift = rightEdge - (chart.width - margin);
-          textX -= shift; lx -= shift;
-        }
-      } else {
-        const leftEdge = textX - maxTextWidth;
-        if(leftEdge < margin){
-          const shift = margin - leftEdge;
-          textX += shift; lx += shift;
-        }
-      }
-      const minLy = margin + 17;
-      const maxLy = chart.height - margin - 16;
-      if(ly < minLy) ly = minLy;
-      if(ly > maxLy) ly = maxLy;
       ctx.save();
-      ctx.strokeStyle = '#a3a3a3';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(ex, ey);
-      ctx.lineTo(lx, ly);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(ex, ey, 2.75, 0, Math.PI*2);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-      ctx.lineWidth = 1.25;
-      ctx.strokeStyle = '#7a7a7a';
-      ctx.stroke();
-      ctx.textAlign = onRight ? 'left' : 'right';
-      ctx.textBaseline = 'alphabetic';
-      ctx.font = '700 16px Helvetica Neue, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       ctx.fillStyle = '#1a1f36';
-      ctx.fillText(pctText, textX, ly - 1);
-      ctx.font = '600 11px Helvetica Neue, Arial, sans-serif';
-      ctx.fillStyle = '#8a8a8a';
-      ctx.fillText(countText, textX, ly + 13);
+      if(pct >= 10){
+        // porción grande: porcentaje dentro de la torta
+        ctx.font = '700 13px Helvetica Neue, Arial, sans-serif';
+        const r = props.outerRadius*0.55;
+        ctx.fillText(pctText, props.x + Math.cos(mid)*r, props.y + Math.sin(mid)*r);
+      } else {
+        // porción pequeña: porcentaje fuera de la torta, junto a su borde
+        ctx.font = '700 15px Helvetica Neue, Arial, sans-serif';
+        const r = props.outerRadius + 14;
+        const w = ctx.measureText(pctText).width/2 + 4;
+        let x = props.x + Math.cos(mid)*r;
+        let y = props.y + Math.sin(mid)*r;
+        x = Math.max(w, Math.min(chart.width - w, x));
+        y = Math.max(10, Math.min(chart.height - 10, y));
+        ctx.fillText(pctText, x, y);
+      }
       ctx.restore();
     });
   }
@@ -842,7 +803,7 @@ const proudCharts = {};
 function renderProudDonut(canvasId, yes, no){
   const ctx = document.getElementById(canvasId).getContext('2d');
   if(proudCharts[canvasId]) proudCharts[canvasId].destroy();
-  proudCharts[canvasId] = new Chart(ctx, {type:'doughnut', data:proudDonutData(yes,no), options:fullDonutOpts, plugins:[donutCalloutPlugin]});
+  proudCharts[canvasId] = new Chart(ctx, {type:'pie', data:proudDonutData(yes,no), options:fullDonutOpts, plugins:[donutCalloutPlugin]});
 }
 function updateProudLegend(elId, yes, no){
   const el = document.getElementById(elId);
